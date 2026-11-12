@@ -653,3 +653,155 @@ SEED_ROWS: dict[str, list[dict[str, Any]]] = {
   '水印内容': '数据分享样例3',
   '过期自动清理': '数据分享样例3'}]
 }
+
+# 借阅相关的内部表。它们不参与业务模块列表，但同样放在示例数据里，
+# 这样起服务后立刻能看到一条待审批申请和一条有期限的有效授权。
+#
+# datastore_meta 按 id 合并进原有的数据集样例：只为样例补充归属与列级配置，
+# 不改动原有的业务字段。无所有者的样例保持 owner_id 为空，必须由维护者显式认领。
+BORROW_SEED_ROWS: dict[str, list[dict[str, Any]]] = {
+    "datastore_meta": [
+        {
+            "id": 1,
+            "owner_id": None,
+            "公开字段": [],
+            "borrow_enabled": False,
+            "字段说明": {},
+        },
+        {
+            "id": 2,
+            "owner_id": None,
+            "公开字段": [],
+            "borrow_enabled": False,
+            "字段说明": {},
+        },
+        {
+            "id": 3,
+            "owner_id": "owner-alpha",
+            "公开字段": ["数据集名称"],
+            "borrow_enabled": True,
+            "字段说明": {
+                "数据集编号": "数据集对外编号",
+                "数据集名称": "数据集名称",
+                "来源表名": "上游来源表",
+                "字段列表": "字段清单，含敏感列",
+                "更新策略": "更新策略，含业务口径",
+                "数据采样比例": "采样比例",
+                "生命周期天数": "生命周期",
+                "缓存开关": "缓存配置",
+            },
+        },
+    ],
+    "borrow_requests": [
+        {
+            "id": 1,
+            "dataset_id": 3,
+            "requester_id": "borrower-gamma",
+            "requester_name": "使用方 Gamma",
+            "columns": ["数据集名称", "来源表名"],
+            "purpose": "季度经营分析需要核对数据集来源",
+            "status": "待审批",
+            "base_revision": 1,
+            "client_token": None,
+            "created_at": "2026-11-10T02:00:00+00:00",
+            "decided_at": None,
+            "decided_by": None,
+            "decision_remark": None,
+            "closed_at": None,
+            "closed_by": None,
+            "close_reason": None,
+            "expires_at": None,
+            "grant_decision_id": None,
+        },
+    ],
+    "access_decisions": [
+        {
+            "id": 1,
+            "dataset_id": 3,
+            "subject_id": "borrower-gamma",
+            "subject_name": "使用方 Gamma",
+            "decision_type": "授权",
+            "source": "直接授权",
+            "status": "有效",
+            "columns": ["数据集编号"],
+            "revoked_columns": [],
+            "priority": 60,
+            "revision": 1,
+            "expires_at": "2026-12-31T00:00:00+00:00",
+            "created_at": "2026-11-09T01:00:00+00:00",
+            "created_by": "owner-alpha",
+            "request_id": None,
+            "revoked_at": None,
+            "revoked_by": None,
+            "revoke_reason": None,
+        },
+    ],
+    "access_events": [
+        {
+            "id": 1,
+            "at": "2026-11-09T01:00:00+00:00",
+            "action": "授权",
+            "outcome": "成功",
+            "actor_id": "owner-alpha",
+            "actor_name": "数据集维护者 Alpha",
+            "dataset_id": 3,
+            "subject_id": "borrower-gamma",
+            "columns": ["数据集编号"],
+            "request_id": None,
+            "decision_id": 1,
+            "query_id": None,
+            "revision": 1,
+            "detail": "来源=直接授权，优先级=60，到期=2026-12-31T00:00:00+00:00",
+        },
+        {
+            "id": 2,
+            "at": "2026-11-10T02:00:00+00:00",
+            "action": "申请",
+            "outcome": "成功",
+            "actor_id": "borrower-gamma",
+            "actor_name": "使用方 Gamma",
+            "dataset_id": 3,
+            "subject_id": "borrower-gamma",
+            "columns": ["数据集名称", "来源表名"],
+            "request_id": 1,
+            "decision_id": None,
+            "query_id": None,
+            "revision": 1,
+            "detail": "季度经营分析需要核对数据集来源",
+        },
+    ],
+}
+
+# 数据集字段列表样例：真实的多列表单，列级授权才有可演示的粒度。
+DATASTORE_COLUMN_SEED: dict[int, str] = {
+    1: "数据集编号, 数据集名称, 来源表名",
+    2: "数据集编号, 数据集名称, 来源表名",
+    3: "数据集编号, 数据集名称, 来源表名, 字段列表, 更新策略, 数据采样比例, 生命周期天数, 缓存开关",
+}
+
+# 查询样例的治理字段：把样例查询挂到真实数据集上，执行时才会触发列级裁决。
+QUERY_SEED_META: dict[int, dict[str, Any]] = {
+    1: {
+        "dataset_id": 3,
+        "created_by": "borrower-gamma",
+        "目标数据集": "DATA-0003",
+        "查询表达式": "SELECT 数据集编号 FROM DATA-0003",
+        "返回字段": "数据集编号",
+    },
+    2: {
+        "dataset_id": 3,
+        "created_by": "borrower-gamma",
+        "目标数据集": "DATA-0003",
+        "查询表达式": "SELECT 数据集编号, 数据集名称 FROM DATA-0003",
+        "返回字段": "数据集编号, 数据集名称",
+    },
+    3: {
+        "dataset_id": 3,
+        "created_by": "owner-alpha",
+        "目标数据集": "DATA-0003",
+        "查询表达式": "SELECT * FROM DATA-0003",
+        "返回字段": "数据集编号, 数据集名称, 来源表名, 字段列表, 更新策略, 数据采样比例, 生命周期天数, 缓存开关",
+    },
+}
+
+

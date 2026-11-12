@@ -75,5 +75,65 @@ npm run dev
 - 列表接口统一返回 `{ items, total, page, size }`，动作接口统一返回 `{ ok, message }`。
 - 状态流转只允许在 `app/services` 里改，路由层不做业务判断。
 
+## 数据集列级借阅
+
+数据集管理支持按字段开放借阅，能力由服务端按归属裁决，前端只负责渲染结果。
+
+### 身份
+
+演示环境用 `X-Actor-Id` 请求头映射到内置账号（见 `backend/app/identity.py`），
+前端顶部可以切换；未提供或无法识别的身份一律按**公开浏览者**处理。
+生产环境应替换为经过校验的登录票据，不能信任客户端自报的归属。
+
+| 账号 | 名称 | 能力 |
+| --- | --- | --- |
+| `owner-alpha` / `owner-beta` | 数据集维护者 | 认领数据集、配置公开字段、审批申请、授予/撤销字段 |
+| `borrower-gamma` | 使用方 | 按字段申请借阅，只能读取获准列 |
+| `platform-admin` | 平台管理员 | 管理员能力与归属移交 |
+| （未提供） | 公开浏览者 | 只读显式公开字段，没有任何写权限 |
+
+### 归属
+
+- 数据集有且只有一个所有者，存在 `owner_id` 上；请求头只回答“你是谁”。
+- 样例 `DATA-0001` / `DATA-0002` 是无所有者数据：可只读浏览以兼容原有体验，
+  但会拒绝任何状态流转，需维护者先调 `POST /api/datastore/{id}/access/claim`。
+- 登记新数据集时登记人自动成为所有者，不会留下无主记录。
+
+### 列级裁决与优先级
+
+- 每次读取都重新计算有效字段，不缓存授权快照；收窄范围对新请求立即生效。
+- 同字段多份有效授权时：`priority` 高者优先 → `revision` 新者优先 → 决定编号大者优先；
+  证据留在 `access_decisions` 与审计事件里。
+- 显式撤销（`POST /api/datastore/{id}/access/revoke`）推进版本并把对应字段标记为
+  `已撤销`。撤销前创建的申请带旧的 `base_revision`，撤销后批准会被 409 拦下；
+  旧客户端带旧 `expected_revision` 追加授权同样被 409 拦下。
+- 已完成查询保留当时的准入证据（`admission` 含字段、决定、版本与服务端摘要），
+  结果只按“完成时准入字段 ∩ 当前可读字段”下发，旧证据不能扩大读取。
+
+### 接口速览
+
+| 动作 | 接口 |
+| --- | --- |
+| 能力与可读列 | `GET /api/datastore/{id}/access/permission` |
+| 认领 / 配置 | `POST /api/datastore/{id}/access/claim`、`/access/config` |
+| 申请 / 裁决 / 撤回 | `POST /api/datastore/{id}/access/requests`、`/api/datastore/access/requests/{rid}/decision`、`.../withdraw` |
+| 直接授权 / 撤销 | `POST /api/datastore/{id}/access/decisions`、`/access/revoke` |
+| 决定与审计 | `GET /api/datastore/{id}/access/decisions`、`/access/events` |
+| 查询执行与结果 | `POST /api/query/{id}/actions`、`GET /api/query/{id}/result` |
+
+### 测试
+
+```bash
+cd backend
+.venv/bin/pip install pytest httpx
+.venv/bin/python -m pytest tests -q
+```
+
+`pytest`、`httpx` 只在测试时需要，未写入 `requirements.txt`，避免影响运行时依赖。
+
+覆盖：角色能力区分、无主样例只读、服务端归属校验、申请-批准-到期-撤销时间线、
+范围收窄对新查询生效、已完成查询证据保留但不扩大读取、冲突优先级、
+显式撤销优先于过期客户端的追加请求。
+
 领域：数据工程
 子方向：数据分析与数据应用

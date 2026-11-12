@@ -5,10 +5,12 @@
 """
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.config import settings
+from app.errors import DomainError
 from app.routers import ROUTERS
 from app.store import store
 
@@ -24,6 +26,12 @@ app.add_middleware(
 
 for module in ROUTERS:
     app.include_router(module.router)
+
+
+@app.exception_handler(DomainError)
+def handle_domain_error(_request: Request, error: DomainError) -> JSONResponse:
+    """领域错误统一转成 ``{detail: ...}``，和 FastAPI 默认的错误形状保持一致。"""
+    return JSONResponse(status_code=error.status_code, content={"detail": error.message})
 
 
 @app.get("/api/health")
